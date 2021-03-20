@@ -1,0 +1,787 @@
+---
+title: "California Valley Oak Demographic Inference"
+author: "Jesse Garcia"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document:
+    keep_tex: yes
+bibliography: /Users/jessegarcia/Documents/OakTrees/data/MyCollection.bib
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(message=FALSE)
+knitr::opts_chunk$set(warning=FALSE)
+knitr::opts_chunk$set(fig.pos = 'h')
+knitr::opts_chunk$set(cache = F)
+library(tidyverse)
+library(glue)
+library(gghighlight)
+library(cowplot)
+library(ggbeeswarm)
+
+library(viridis)
+library("ggsci")
+library(psmc2msprime)
+library(scales)
+downsampleToNReplicates<-function(df, numberOfReplicates){
+  assertthat::has_name(df, "Replicate")
+  testthat::expect_lte(numberOfReplicates,length(unique(df$Replicate)))
+  replicatesToSample<-sample(unique(df$Replicate),numberOfReplicates)
+  df<- df %>% 
+  filter(Replicate %in% replicatesToSample)
+  return(df)
+}
+```
+
+
+  
+  
+
+## Figure 2C
+```{r}
+mu <- 1.01e-8
+qlobGen <- 50
+qrobGen <- 30
+
+qlob <- "Q. lobata"
+
+
+
+colorsForPlot= c("Q. lobata reference genome" = "#013982", 
+                                 "Q. lobata resequenced genomes" = "#02c0e3",
+                 "Q. robur reference genome" = "#D74E09")
+
+
+resequenced<-readRDS("../data/SouthernQlobataResequenced_Nov26_2018.rds") %>% mutate(Type="Q. lobata resequenced genomes")
+
+
+resequencedMSMC<-"../data/resequenced/"
+msmcFiles<-list.files(resequencedMSMC, full.names = T, pattern="final.txt")
+id<-str_extract(msmcFiles, pattern="QL.*00F")
+
+msmcFilesDf<-tibble(
+  msmcFiles=msmcFiles,
+  individuals=id
+  
+)
+
+msmcFilesDf$files<-msmcFilesDf$msmcFiles %>% purrr::map(~read_delim(.x, delim="\t", col_names = T))
+
+msmcFilesDf <-msmcFilesDf %>% unnest(files)
+
+
+
+msmcFilesDf<-msmcFilesDf  %>% 
+  mutate(Time=left_time_boundary/mu*qlobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>% 
+  mutate(Type="Q. lobata resequenced genomes Ying Did", species="Q. lobata")
+
+
+allResequenced<-bind_rows(msmcFilesDf, resequenced) %>% filter(Type !="Q. lobata resequenced genomes Ying Did", individuals != "QL.BER.1", individuals != "QL.HV.1", individuals != "QL.WLT.2")
+
+
+
+
+
+
+justQlobata<-allResequenced %>%
+  ggplot(aes(x=Time, y=EffectivePopulationSize, colour=individuals, linetype=Type)) +
+  geom_step(size=1) +                                                                                                                                                                                  
+  theme_bw() +                                                                                                                                              
+  scale_x_continuous(trans='log10',labels = scales::comma) +                                                                                                                                   
+  scale_y_continuous(trans='log10') + 
+  labs(x="Years Ago", y="Effective Population Size")
+
+
+
+
+ #ggsave(filename="../analysis/Qlobata_PSMC_JesseResequence_YingResequenced_Nov28_2018.pdf", plot=justQlobata, height = 10, width=20)
+
+
+
+bootstraps<-readRDS("../data/bootstraps200IterationsEmpirical_Nov8.rds")
+
+
+bootstraps<-bootstraps %>%
+  mutate(id=str_extract(files, pattern = "bootstraps_[0-9]+")) %>%
+  mutate(species=str_extract(files, pattern="q[lr]ob")) %>%
+  mutate(Type=case_when(
+    species=="qlob" ~ "Q. lobata reference genome",
+    species=="qrob" ~ "Q. robur reference genome",
+    
+  )) 
+
+qlobBootstraps<-bootstraps %>% 
+  filter(species=="qlob")  %>% 
+  mutate(Time=left_time_boundary/mu*qlobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(individuals="Q. lobata reference genome")
+
+qrobBootstraps<-bootstraps %>% 
+  filter(species=="qrob")  %>% 
+  mutate(Time=left_time_boundary/mu*qrobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(individuals="Q. robur reference genome")
+
+allPSMC<-allResequenced %>%
+  ggplot(aes(x=Time/1000000, y=EffectivePopulationSize,colour=Type, group=interaction(individuals, Type))) +
+  geom_step(alpha=.4) +
+
+  geom_step(data=qlobBootstraps, aes(x=Time/1000000, y=EffectivePopulationSize, group=id), alpha=.6) +
+    geom_step(data=qrobBootstraps, aes(x=Time/1000000, y=EffectivePopulationSize, group=id), alpha=.6) +
+  theme(text = element_text(size=11)) +
+  theme_bw() + 
+  scale_x_continuous(labels = scales::comma) +                                                                                              
+  scale_y_continuous( trans='log10',labels = scales :: comma) +
+  labs(x="Time Since Present (Ma)", y="Effective Population Size") +
+  scale_color_manual(values=colorsForPlot, breaks=c("Q. lobata reference genome", "Q. lobata resequenced genomes", "Q. robur reference genome")) +
+ coord_cartesian( xlim=c(1, 25e6/1000000) )
+ 
+ 
+yaxis=expression(atop("Effective Population Size in Panmictic Population", "(Inverse Coalescence Rate, scaled by " ~2*mu ~")"))
+
+
+ allPSMC +
+  theme(text = element_text(size=25), 
+           legend.justification=c(0,1), 
+           legend.position=c(0.05, 0.95),
+           #legend.background = element_blank(),
+           legend.key = element_blank(),
+        axis.title.y = element_text(size=20),
+       axis.text.x = element_text(size = 14, hjust = .8)
+) + 
+   labs(y=yaxis, colour="") 
+  #geom_vline(xintercept = 19479505/1000000, size=1.2, linetype=2)
+
+```
+
+## Figure 2D
+
+
+#  Changing to y=log and x=log and no trimming color blind friendly
+```{r}
+
+mu <- 1.01e-8
+qlobGen <- 50
+qrobGen <- 30
+
+downsampleToNReplicates<-function(df, numberOfReplicates){
+  assertthat::has_name(df, "Replicate")
+  testthat::expect_lte(numberOfReplicates,length(unique(df$Replicate)))
+  replicatesToSample<-sample(unique(df$Replicate),numberOfReplicates)
+  df<- df %>% 
+  filter(Replicate %in% replicatesToSample)
+  return(df)
+}
+
+convertYearsToGenerations<-function(year, generationTime){
+
+generations=year/generationTime
+return(generations)
+}
+
+convertYearsToGenerations(year=20000000,generationTime=50)
+convertYearsToGenerations(year=1000000,generationTime=50)
+
+psmcOnSimulatedGenomes<-read_rds("../data/PSMCOnMSprimeSimulatedWholeGenomes_200Iterations_Jan16.rds") %>% 
+  mutate(InferredOrTrue="Inferred Demography") %>%
+  mutate(ForWhichSample=case_when(
+    SimulatedModel=="simulatingQLobataWholeReferenceGenome"~"Q. lobata reference genome",
+    SimulatedModel=="simulatingQRoburWholeReferenceGenome" ~ "Q. robur reference genome",
+    SimulatedModel=="simulatingResequencedWholeReferenceGenome" ~ "Q. lobata resequenced genome"
+  )) %>%
+  mutate(ForWhichSample=factor(ForWhichSample, levels=c("Q. lobata reference genome", "Q. lobata resequenced genome","Q. robur reference genome")))
+
+
+
+psmcOnSimulatedGenomes= psmcOnSimulatedGenomes %>%
+  group_by(Model) %>%
+  do(downsampleToNReplicates(df=., numberOfReplicates = 10))
+
+
+
+
+summarryOfPSMC<-psmcOnSimulatedGenomes %>% 
+  group_by(Model) %>%
+  summarise(OldestGeneration=max(generationsAgo))
+
+
+
+
+
+qlobataEmpiricalReference<-psmc2msprime::readMSMCInference(pathOfMSMCOutFinal = "../data/msmcDemographies/200/qlobataBootstrap200Iterations.tsv", mutationRate = 1.01e-08) %>% 
+  slice(1:32) %>%
+  add_row(generationsAgo=841775, EffectivePopulationSize=233502) %>%
+  mutate(Type="Empirical Q. lobata reference genome") %>%
+  mutate(InferredOrTrue="True Demography") %>%
+  mutate(ForWhichSample="Q. lobata reference genome")%>%
+  mutate(Replicate=1)
+
+qlobataEmpiricalResequenced<-psmc2msprime::readMSMCInference(pathOfMSMCOutFinal = "../data/msmcDemographies/200/resequenced200Iterations.tsv", mutationRate = 1.01e-08) %>% 
+  slice(1:28) %>% 
+  add_row(generationsAgo=1165782, EffectivePopulationSize=239821) %>%
+  mutate(Type="Empirical Resequenced Q. lobata genome") %>%
+  mutate(InferredOrTrue="True Demography") %>%
+  mutate(ForWhichSample="Q. lobata resequenced genome")%>%
+  mutate(Replicate=1)
+
+qroburEmpiricalReference<-psmc2msprime::readMSMCInference(pathOfMSMCOutFinal = "../data/msmcDemographies/200/qroburBootstrap200Iterations.tsv", mutationRate = 1.01e-08) %>% 
+  slice(1:32) %>%
+  add_row(generationsAgo=1270663, EffectivePopulationSize=257944) %>%
+  mutate(Type="Empirical Q. robur reference genome") %>%
+  mutate(InferredOrTrue="True Demography") %>%
+  mutate(ForWhichSample="Q. robur reference genome") %>%
+  mutate(Replicate=1)
+
+cbPalette <- c("#E69F00", "#999999","#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+
+
+bind_rows(psmcOnSimulatedGenomes, qlobataEmpiricalReference, qlobataEmpiricalResequenced, qroburEmpiricalReference) %>% 
+  ggplot(aes(x=generationsAgo/1000,y=EffectivePopulationSize,colour=InferredOrTrue, group=interaction(ForWhichSample,Replicate,InferredOrTrue))) +
+  geom_step(size=1.5) +
+  theme(text = element_text(size=18)) +
+  theme_bw() + 
+  scale_x_continuous(trans='log10',labels = scales::comma) +                                                                                             
+  scale_y_continuous(trans='log10', labels = scales :: comma) +
+  labs(x="Generations Ago (x1,000)", y="Effective Population Size", colour="") +
+  facet_wrap(~ForWhichSample, labeller = label_wrap_gen(width = 25,multi_line = TRUE) ) +
+  theme(text = element_text(size=18), legend.position = "bottom") +
+  #coord_cartesian( xlim=c(1, 4e+05/1000) ) + 
+ scale_color_manual(values=cbPalette)
+
+
+```
+
+
+
+## Figure S4
+
+
+```{r echo=F}
+# Run computing_tajimas_pi_reference_genome.R
+
+
+diversity<-read_rds("../data/pi_diversity_january_9_2020.rds")
+
+library(ggridges)
+
+df<-tibble(
+  chromosome=1:12,
+  diversity=diversity %>% map(1)
+) %>%  
+  mutate(chromosome = glue("chr{chromosome}")) %>%
+  mutate(chromosome = fct_inorder(chromosome)) %>%
+  unnest(diversity)
+  
+
+
+df %>% 
+  ggplot(aes(y=chromosome, x=diversity) ) + 
+  geom_density_ridges(alpha=.9, fill="orange") + 
+  theme_bw() + 
+  labs(x="Tajima's Pi (500kb windows)", y="", fill="Chromosome") +
+  theme(text=element_text(size=22))
+  
+```
+
+## Figure S5
+
+```{r}
+piPerSite<-readRDS("../data/PiPerSiteResequencedGenomes_November262019.rds")
+
+piPerSite %>%
+  filter(  !( individuals %in% c("QL.BER.1.00F.2018", "QL.HV.1.00F.2018", "QL.WLT.2.00F.2018")   ) ) %>%
+  mutate(piPerSite=pi/totalCallable) %>% 
+  ggplot(aes(x=individuals, y=piPerSite)) + 
+  geom_violin(fill="orange") + 
+  theme_bw() + 
+  labs(x="", y="Heterozygosity") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(text = element_text(size=18)) 
+
+```
+
+
+## Figure S6
+
+```{r cars}
+mu <- 1.01e-8
+qlobGen <- 50
+qrobGen <- 30
+
+
+allIterations<-readRDS("../data/IterationsOfQRobAndQLobAndSims.rds")
+
+qLobIterations<-allIterations %>% filter(Type=="Q. Lobata Reference Genome Bootstrapped") %>% mutate(Time=left_time_boundary/mu*qlobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(MutationRate="Mutation Rate: 1.01e-08 bp/gen")
+
+qRobIterations<-allIterations %>% filter(Type=="Q. Robur Reference Genome Bootstrapped") %>% mutate(Time=left_time_boundary/mu*qrobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) )  %>%
+  mutate(MutationRate="Mutation Rate: 1.01e-08 bp/gen")
+
+allIterationsMutationRate1<- bind_rows(qLobIterations, qRobIterations)
+
+
+
+mu2<-1.5e-08
+qLobIterations<-allIterations %>% filter(Type=="Q. Lobata Reference Genome Bootstrapped") %>% mutate(Time=left_time_boundary/mu2*qlobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu2) ) %>%
+  mutate(MutationRate="Mutation Rate: 1.5e-08 bp/gen")
+qRobIterations<-allIterations %>% filter(Type=="Q. Robur Reference Genome Bootstrapped") %>% mutate(Time=left_time_boundary/mu2*qrobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu2) )  %>%
+  mutate(MutationRate="Mutation Rate: 1.5e-08 bp/gen")
+
+allIterationMutationRate2<- bind_rows(qLobIterations, qRobIterations)
+
+
+
+allIterations<-bind_rows(allIterationsMutationRate1,allIterationMutationRate2)
+
+
+mutationRatePlot<-allIterations %>% 
+  filter(iteration == 50 , Type == "Q. Lobata Reference Genome Bootstrapped") %>% 
+  ggplot(aes(x=Time, y=EffectivePopulationSize, colour=MutationRate) ) +
+  geom_step(size=2) +
+ labs(x = 'Years Ago', y = 'Effective Population Size') +
+scale_x_continuous(trans='log10',labels = scales::comma) +    
+  scale_y_continuous(trans='log10',labels = scales::comma) + 
+  theme_bw() +
+  theme(text = element_text(size=15), 
+           legend.justification=c(0,1), 
+           legend.position=c(0.05, 0.95),
+           legend.background = element_blank(),
+           legend.key = element_blank(),
+        axis.title.y = element_text(size=20),
+        axis.title.x = element_text(size=20),
+      axis.text.y = element_text (size = 20),
+       axis.text.x = element_text (size = 20)
+) + 
+  guides(colour = guide_legend(ncol = 1, override.aes = list(size=1))) + 
+  labs(colour="") 
+
+
+mutationRatePlot<-allIterations %>% 
+  filter(iteration == 50 , Type == "Q. Lobata Reference Genome Bootstrapped") %>% 
+  ggplot(aes(x=Time, y=EffectivePopulationSize, colour=MutationRate) ) +
+  geom_step(size=2) +
+ labs(x = 'Years Ago', y = 'Effective Population Size') +
+scale_x_continuous(trans='log10', labels = scales::comma) +    
+  scale_y_continuous(trans='log10',labels = scales::comma) + 
+  theme_bw() +
+  theme(text = element_text(size=15), 
+           legend.justification=c(0,1), 
+           legend.position=c(0.05, 0.95),
+           legend.background = element_blank(),
+           legend.key = element_blank(),
+        axis.title.y = element_text(size=20),
+        axis.title.x = element_text(size=20),
+      axis.text.y = element_text (size = 20),
+       axis.text.x = element_text (size = 20)
+) + 
+  guides(colour = guide_legend(ncol = 1, override.aes = list(size=1))) + 
+  labs(colour="") 
+
+
+allIterations<-readRDS("../data/IterationsOfQRobAndQLobAndSims.rds")
+
+qlobGen1 <- 30
+
+qLobGeneration1<-allIterations %>% filter(Type=="Q. Lobata Reference Genome Bootstrapped") %>% mutate(Time=left_time_boundary/mu*qlobGen1, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(Generation="Generation Time: 30 Years")
+
+qlobGen2 <- 50
+
+
+qLobGeneration2<-allIterations %>% filter(Type=="Q. Lobata Reference Genome Bootstrapped") %>% mutate(Time=left_time_boundary/mu*qlobGen2, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(Generation="Generation Time: 50 Years")
+
+qlobGen3 <- 100
+
+qLobGeneration3<-allIterations %>% filter(Type=="Q. Lobata Reference Genome Bootstrapped") %>% mutate(Time=left_time_boundary/mu*qlobGen3, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(Generation="Generation Time: 100 Years")
+
+qLobGeneration<-bind_rows(qLobGeneration3,qLobGeneration2, qLobGeneration1)
+
+qLobGeneration$Generation<-factor(qLobGeneration$Generation, levels=c("Generation Time: 100 Years","Generation Time: 50 Years","Generation Time: 30 Years" ))
+
+generationPlot<-qLobGeneration %>%
+  filter(iteration==50) %>%
+  ggplot(aes(x=Time, y=EffectivePopulationSize, colour=Generation) ) +
+  geom_step(size=2) +
+ labs(x = 'Years Ago', y = 'Effective Population Size') +
+  scale_x_continuous(trans='log10',labels = scales::comma, 
+                expand = c(0.1, 0)) +                                        
+  scale_y_continuous(trans='log10',labels = scales::comma) + 
+  theme_bw() +
+  theme(text = element_text(size=15), 
+           legend.justification=c(0,1), 
+           legend.position=c(0.00, 0.95),
+           legend.background = element_blank(),
+           legend.key = element_blank(),
+        axis.title.y = element_text(size=20),
+        axis.title.x = element_text(size=20),
+       axis.text.y = element_text (size = 20),
+       axis.text.x = element_text (size = 20)
+) + 
+  guides(colour = guide_legend(ncol = 1, override.aes = list(size=1))) + 
+  labs(colour="") 
+
+
+
+plot_grid(mutationRatePlot, generationPlot, labels = c("A", "B"), nrow =2, align = "h")
+
+
+```
+
+\newpage
+\
+
+## Figure S7
+
+```{r out.width='\\textwidth',fig.align="left", fig.cap = "Full demographic model inferred by PSMC'. \\label{supFullModel}"}
+qlobGen <- 50
+qrobGen <- 30
+
+
+scientific_10 <- function(x) {
+  ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scientific_format()(x)))))
+  }
+
+
+
+
+
+qlob <- "Q. lobata"
+
+
+
+colorsForPlot= c("Q. lobata reference genome" = "#013982", 
+                                 "Q. lobata resequenced genomes" = "#02c0e3",
+                 "Q. robur reference genome" = "#D74E09")
+
+
+resequenced<-readRDS("../data/SouthernQlobataResequenced_Nov26_2018.rds") %>% mutate(Type="Q. lobata resequenced genomes")
+
+
+resequencedMSMC<-"../data/resequenced/"
+msmcFiles<-list.files(resequencedMSMC, full.names = T, pattern="final.txt")
+id<-str_extract(msmcFiles, pattern="QL.*00F")
+
+msmcFilesDf<-tibble(
+  msmcFiles=msmcFiles,
+  individuals=id
+  
+)
+
+msmcFilesDf$files<-msmcFilesDf$msmcFiles %>% purrr::map(~read_delim(.x, delim="\t", col_names = T))
+
+msmcFilesDf <-msmcFilesDf %>% unnest(files)
+
+
+
+msmcFilesDf<-msmcFilesDf  %>% 
+  mutate(Time=left_time_boundary/mu*qlobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>% 
+  mutate(Type="Q. lobata resequenced genomes Ying Did", species="Q. lobata")
+
+
+allResequenced<-bind_rows(msmcFilesDf, resequenced) %>% filter(Type !="Q. lobata resequenced genomes Ying Did", individuals != "QL.BER.1", individuals != "QL.HV.1", individuals != "QL.WLT.2")
+
+
+
+
+
+
+justQlobata<-allResequenced %>%
+  ggplot(aes(x=Time, y=EffectivePopulationSize, colour=individuals, linetype=Type)) +
+  geom_step(size=1) +                                                                                                                                                                                  
+  theme_bw() +                                                                                                                                              
+  scale_x_continuous(trans='log10',labels = scales::comma) +                                                                                                                                   
+  scale_y_continuous(trans='log10') + 
+  labs(x="Years Ago", y="Effective Population Size")
+
+
+
+
+ #ggsave(filename="../analysis/Qlobata_PSMC_JesseResequence_YingResequenced_Nov28_2018.pdf", plot=justQlobata, height = 10, width=20)
+
+
+
+bootstraps<-readRDS("../data/bootstraps200IterationsEmpirical_Nov8.rds")
+
+
+bootstraps<-bootstraps %>%
+  mutate(id=str_extract(files, pattern = "bootstraps_[0-9]+")) %>%
+  mutate(species=str_extract(files, pattern="q[lr]ob")) %>%
+  mutate(Type=case_when(
+    species=="qlob" ~ "Q. lobata reference genome",
+    species=="qrob" ~ "Q. robur reference genome",
+    
+  )) 
+
+qlobBootstraps<-bootstraps %>% 
+  filter(species=="qlob")  %>% 
+  mutate(Time=left_time_boundary/mu*qlobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(individuals="Q. lobata reference genome")
+
+qrobBootstraps<-bootstraps %>% 
+  filter(species=="qrob")  %>% 
+  mutate(Time=left_time_boundary/mu*qrobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) %>%
+  mutate(individuals="Q. robur reference genome")
+
+allPSMC<-allResequenced %>%
+  ggplot(aes(x=Time/1000000, y=EffectivePopulationSize,colour=Type, group=interaction(individuals, Type))) +
+  geom_step(alpha=.4) +
+
+  geom_step(data=qlobBootstraps, aes(x=Time/1000000, y=EffectivePopulationSize, group=id), alpha=.6) +
+    geom_step(data=qrobBootstraps, aes(x=Time/1000000, y=EffectivePopulationSize, group=id), alpha=.6) +
+  theme(text = element_text(size=16)) +
+  theme_bw() + 
+  scale_y_continuous( trans='log10',label= function(x) {ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scientific_format()(x)))))} ) +
+  labs(x="Time Since Present (Ma)", y="Effective Population Size") +
+  scale_color_manual(values=colorsForPlot, breaks=c("Q. lobata reference genome", "Q. lobata resequenced genomes", "Q. robur reference genome")) 
+ 
+ 
+yaxis=expression(atop("Effective Population Size in a Panmictic Population", "(Inverse Coalescence Rate, scaled by " ~2*mu ~")"))
+
+
+
+
+ allPSMC +
+   labs(y=yaxis, colour="") +
+   guides(fill = guide_legend(keywidth = 1, keyheight = 1),
+    linetype=guide_legend(keywidth = 3, keyheight = 1),
+    colour=guide_legend(keywidth = 3, keyheight = 1))
+  #geom_vline(xintercept = 19479505/1000000, size=1.2, linetype=2)
+ 
+ 
+
+```
+
+\newpage
+\
+
+
+
+
+\newpage
+\
+
+
+## Figure S8
+```{r out.width='\\textwidth', fig.align="left", fig.cap = "Predicted heterozgyosity for 1Mb regions for all 40 models for each genome type. \\label{supFigHetForEach}"}
+
+
+demographiesToSimulate<-readRDS( "../data/demographies200IterationsPi_Jan2_2018.rds")
+
+colorsForPlot= c("Q. lobata reference genome" = "#013982", 
+                                 "Q. lobata resequenced genome" = "#02c0e3",
+                 "Q. robur reference genome" = "#D74E09")
+
+
+test<-demographiesToSimulate %>%
+  mutate(Model=case_when(
+    str_detect(demographiesToSimulateFilePaths, pattern = "qrobur") ~ "Q. robur reference genome",
+     str_detect(demographiesToSimulateFilePaths, pattern = "qlobata") ~ "Q. lobata reference genome",
+    str_detect(demographiesToSimulateFilePaths, pattern = "resequenced") ~ "Q. lobata resequenced genome",
+  )) %>%
+  unnest(pi)
+
+
+keyOfHet<-tibble(
+  Model = c("Q. robur reference genome","Q. lobata reference genome", "Q. lobata resequenced genome"),
+  EmpiricalHeterozygosity = c(.007359454,  .00500 ,0.006484428),
+  colourToUse=c( "#D74E09"  ,"#013982", "#02c0e3" ),
+  bestPoint=c(32, 32,28)
+)
+
+
+#. Our best models for Q. lobata reference genome, Q. robur reference genome and Q. lobata resequenced genome were defined by 32, 32, and 28 points respectively
+
+test=left_join(test, keyOfHet)
+
+
+newTest<-test %>%
+  group_by(Model) %>%
+  group_split()
+
+
+plots<-newTest %>% purrr::map(~.x %>%
+  ggplot(aes(x=maximumGeneration, y=Pi, colour=Model)) +
+  geom_line() +
+  geom_point() +
+  theme_bw() +
+  labs(x="Oldest Generation Simulated", y="Heterozygosity Per Site", colour="Model") +
+  geom_hline(aes(yintercept = EmpiricalHeterozygosity,colour=Model), linetype="dashed") + 
+  scale_color_manual(values=colorsForPlot, breaks=c("Q. lobata reference genome", "Q. lobata resequenced genome", "Q. robur reference genome")) +
+  labs(colour="Genome Type") +
+  scale_x_continuous(limits=c(0, 1e6)) +
+    gghighlight(rowsToNotInclude == bestPoint, use_direct_label = FALSE)
+ )
+
+
+cowplot::plot_grid(plotlist = plots, nrow=3, align = "hv")
+
+
+```
+
+`
+
+
+
+\newpage
+\
+
+
+## Figure S9
+```{r fig.align="left",out.width='\\textwidth',fig.cap = "Predicted heterozygosity of 1Mb regions of best trimmed models. \\label{supFigHeterozygosity}"}
+
+
+
+
+colorsForPlot= c("Simulated Q. lobata reference genome" = "#013982", 
+                                "Simulated Q. lobata resequenced genome" = "#02c0e3",
+                 "Simulated Q. robur reference genome" = "#D74E09")
+
+
+
+
+
+
+
+
+qlobref<-readRDS("../data/qlobataBootstrap200Iterations_row32_120iterations.rds") %>% 
+  bind_rows() %>% 
+  mutate(Species="Q. lobata", Type="Simulated", Sample="Simulated Q. lobata reference genome", EmpiricalHeterozygosity=.00500, EmpiricalGenome="Q. lobata reference genome") 
+
+
+qlobres<-readRDS("../data/resequenced200Iterations_row28_120iterations.rds") %>% 
+  bind_rows() %>% 
+  mutate(Species="Q. lobata", Type="Simulated", Sample="Simulated Q. lobata resequenced genome", EmpiricalHeterozygosity=0.006484428 , EmpiricalGenome="Q. lobata resequenced genome")
+
+
+qrobref<-readRDS("../data/qroburBootstrap200Iterations_row32_120iterations.rds") %>% 
+  bind_rows()  %>% 
+  mutate(Species="Q. robur", Type="Simulated", Sample="Simulated Q. robur reference genome", EmpiricalHeterozygosity=.007359454 , EmpiricalGenome="Q. robur reference genome")
+
+
+df<-bind_rows(qlobref,qlobres,qrobref)
+
+
+df %>%
+  mutate(Het=numberOfHeterozygotes/totalGenomeLength) %>%
+  ggplot(aes(x=Sample, y=Het, colour=Sample)) + 
+  geom_boxplot() +
+  geom_quasirandom(method = "pseudorandom") +
+  labs(y="Heterozygosity", linetype="", x="", colour="Heterozygosity") + 
+  theme_bw() +  
+  geom_hline(mapping=aes(yintercept=EmpiricalHeterozygosity, linetype="Empirical Whole Genome Heterozygosity"), size=1.2) +
+  facet_grid(~Sample, scale="free", space="free_x", labeller = label_wrap_gen(width=10)) + 
+  theme(axis.text.x=element_blank()) +
+  scale_color_manual(values=colorsForPlot, breaks=c("Simulated Q. lobata reference genome", "Simulated Q. lobata resequenced genome", "Simulated Q. robur reference genome")) +
+  guides(colour=FALSE)
+
+
+
+# robur ref 29,34 lower,31 higher,32 higher
+# lobata res 28, higher, 33 perfect
+# lobata ref 34 lower, 29 higher, 32 higher
+
+
+
+```
+
+\newpage
+\
+
+
+
+
+## Figure S10
+
+```{r warning=F, echo=F, message=F,fig.align="left", fig.cap = "Predicted heterozygosity of full (untrimmed) PSMC' model compared to the predicted heterozygosity of best trimmed ancestral models. Each point is the heterozygosity of a simulated genome under our best trimmed ancestral model. \\label{supFigHeterozygosity}"}
+
+
+demographiesToSimulate<-readRDS( "../data/demographies200IterationsPi_Jan2_2018.rds")
+
+estimatedFull<-demographiesToSimulate %>%
+  mutate(Model=case_when(
+    str_detect(demographiesToSimulateFilePaths, pattern = "qrobur") ~ "Q. robur reference genome (bootstrap; 200 iterations)",
+     str_detect(demographiesToSimulateFilePaths, pattern = "qlobata") ~ "Q. lobata reference genome (bootstrap; 200 iterations)",
+    str_detect(demographiesToSimulateFilePaths, pattern = "resequenced") ~ "Q. lobata resequenced sample (200 iterations)",
+  )) %>%
+  unnest(pi) %>% 
+  filter(rowsToNotInclude == 40) %>% 
+  dplyr::select(Model, Pi)
+  
+
+
+colorsForPlot= c("Q. lobata reference genome" = "#013982", 
+                                 "Q. lobata resequenced genome" = "#02c0e3",
+                 "Q. robur reference genome" = "#D74E09")
+
+
+
+completedMSMC<-read_rds("../data/CompletedMSMCWithNumberOfHeterozygotes_200Iterations_Jan16.rds") %>%
+  mutate(Sample=case_when(
+      Model=="simulatingQLobataWholeReferenceGenome"~"Q. lobata reference genome",
+      Model=="simulatingQRoburWholeReferenceGenome" ~ "Q. robur reference genome",
+      Model=="simulatingResequencedWholeReferenceGenome" ~ "Q. lobata resequenced genome"
+  )) %>%
+  mutate(EmpiricalHeterozygosity=case_when(
+      Model=="simulatingQLobataWholeReferenceGenome"~.00500,
+      Model=="simulatingQRoburWholeReferenceGenome" ~.007359454 ,
+      Model=="simulatingResequencedWholeReferenceGenome" ~ 0.006484428
+  )) %>%
+  mutate(FullHeterozygosity=case_when(
+      Model=="simulatingQLobataWholeReferenceGenome"~0.0512,
+      Model=="simulatingQRoburWholeReferenceGenome" ~0.0269 ,
+      Model=="simulatingResequencedWholeReferenceGenome" ~ 0.0498
+
+  ))
+
+completedMSMCDownsampled<-completedMSMC %>%
+  group_by(Model) %>%
+  do(downsampleToNReplicates(df=., numberOfReplicates = 10))
+
+
+
+
+
+completedMSMCDownsampled %>%
+  mutate(ChromosomeLength=29e6) %>%
+  group_by(Model, Replicate, Sample) %>%
+  summarise(TotalNumberOfHeterozygotes=sum(NumberOfHeterozygotes), TotalGenomeLength=sum(ChromosomeLength), Het=TotalNumberOfHeterozygotes/TotalGenomeLength) %>%
+  ungroup() %>%
+  group_by(Model) %>%
+  mutate(Replicate=1:10) %>%
+  ggplot(aes(x=Replicate, y=Het, colour=Sample)) + 
+  #geom_boxplot() +
+  geom_point(size=3) +
+  labs(y="Heterozygosity", linetype="", x="", colour="Heterozygosity") + 
+  theme_bw() +  
+  geom_hline(data=completedMSMC,mapping=aes(yintercept=EmpiricalHeterozygosity, linetype="Empirical Whole Genome Heterozygosity"), size=1.5) +
+  geom_hline(data=completedMSMC,mapping=aes(yintercept=FullHeterozygosity, linetype="Untrimmed Ancient Ancestral Heterozygosity"), size=1.5) +
+  facet_grid(~Sample, scale="free", space="free_x", labeller = label_wrap_gen(width = 10,multi_line = TRUE)) + 
+ theme(axis.text.x=element_blank()) +
+  scale_color_manual(values=colorsForPlot, breaks=c("Q. lobata reference genome", "Q. lobata resequenced genome", "Q. robur reference genome")) +
+  guides(colour=F, linetype=guide_legend(nrow=2, byrow = T)) 
+
+
+
+
+
+
+
+
+
+```
+
+\newpage
+\
+
+
+
+
+
+
