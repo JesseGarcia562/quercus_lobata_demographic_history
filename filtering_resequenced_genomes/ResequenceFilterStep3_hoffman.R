@@ -73,7 +73,7 @@ filters<-filters %>%
 filters<-filters %>%
   mutate(extractingIndividual=glue("{vcftools} --vcf {input} --indv {individual} --min-meanDP 12 --recode --recode-INFO-all --out {output}" )   )
 
-#Works!
+#Running command
 system(filters$extractingIndividual[SGETaskID])
 
 
