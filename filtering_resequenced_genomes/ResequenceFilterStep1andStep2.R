@@ -76,25 +76,3 @@ glue("Running command: {filters$commandToRemoveUpstreamIndels[SGETaskID]}
 
 system(filters$commandToRemoveUpstreamIndels[SGETaskID])
 
-
-glue("Running command: {filters$command[SGETaskID]}
-
-	")
-
-
-system(filters$command[SGETaskID])
-
-
-
-## Step 2. Removing upstream Indels
-
-filters<-filters %>% 
-  mutate(commandToRemoveUpstreamIndels=glue("grep -vw '\\*' {output}.recode.vcf > {outputDir}/2018wgs3.ef.rmIndelRepeatsStar.chr{chromosome}.vcf" )   ) 
-
-
-
-glue("Running command: {filters$commandToRemoveUpstreamIndels[SGETaskID]}
-
-	")
-
-system(filters$commandToRemoveUpstreamIndels[SGETaskID])
