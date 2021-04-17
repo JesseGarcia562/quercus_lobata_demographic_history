@@ -66,7 +66,10 @@ The multiHetSep_.txt for our simulated genomes exist in this directory. Files st
 
 # PSMC Masks, input, and final output 
 
+The psmc_inference folder contains these directories and structure:
+
 q_lobata_reference_genomes
+     
      | +-- positive_masks
      
      | +-- PSMC_final_output
@@ -74,7 +77,9 @@ q_lobata_reference_genomes
      | +-- PSMC_input
      
      | +-- scripts
+
 q_robur_reference_genomes
+     
      | +-- positive_masks
      
      | +-- PSMC_final_output
@@ -82,6 +87,7 @@ q_robur_reference_genomes
      | +-- PSMC_input
      
      | +-- scripts
+
 q_lobata_resequenced_genomes
      
      | +-- positive_masks
