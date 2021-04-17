@@ -1,0 +1,99 @@
+
+##Here we are plotting the different resequenced genomes
+
+
+```{r}
+library(tidyverse)
+library(glue)
+
+
+
+
+
+```
+
+
+
+```{r}
+
+
+mu <- 1.01e-8
+qrobGen <- 30
+qlobGen <- 50
+
+
+
+files=list.files("/u/flashscratch/j/jessegar/FilteringResequenceHighP", pattern="final.txt", full.names=T)
+
+
+df<-tibble(
+	   files=files,
+           species="Q. lobata",
+	   Type="Q. lobata Samples from Nov 23 2020"
+)
+
+
+
+df$msmcOutput  <-  df$files %>% map(~ read_delim(.x,delim="\t", col_names = T)) 
+
+
+df<- df %>%     
+	mutate(individuals=str_extract(files, pattern="[A-Z]+.[B0-9]+")) %>%
+				       print()
+
+df  <-  df %>% unnest(msmcOutput) %>% mutate(Time=left_time_boundary/mu*qlobGen, EffectivePopulationSize= (1/lambda_00)/(2*mu) ) 
+
+
+
+
+df %>%
+	ggplot(aes(x=Time, y=EffectivePopulationSize, colour=individuals)) +
+	 geom_step() +
+  theme_bw() + 
+  scale_x_continuous(trans='log10',labels = scales::comma) + 
+  scale_y_continuous(trans='log10') 
+saveRDS(df, "SouthernQlobataResequenced_Nov23_2020.rds", compress=F)
+```
+
+##Looking for correlations between coverage and theta
+
+```{r}
+outputDir<-"/u/flashscratch/j/jessegar/FilteringResequenceHighP"
+files=list.files("/u/flashscratch/j/jessegar/FilteringResequenceHighP", pattern="final.txt", full.names=T)
+coverageSummary<-"../data/data_from_sorel/qlob40.depthCoverage.csv"
+coverageSummary<-read_csv(coverageSummary)
+df<-tibble(
+	   files=files,
+           species="Q. lobata",
+	   Type="Q. lobata Samples from Novv 13"
+)
+
+
+
+df$msmcOutput  <-  df$files %>% map(~ read_delim(.x,delim="\t", col_names = T)) 
+
+
+df<- df %>%     
+	mutate(individuals=str_extract(files, pattern="QL.[A-Z]+.[B0-9]+")) %>%
+
+	print()
+
+df<-df %>% mutate(logFiles=str_replace(files, pattern="final.txt",replacement="log"))
+
+df$mutationRate<-df$logFiles %>% map_dbl(~parse_number(read_lines(.x, skip=3,n_max=1)))
+
+
+df<-df %>%
+	mutate(individuals=str_replace(files, pattern=glue("{outputDir}"), replacement="")) %>%
+	mutate(individuals=str_replace(individuals, pattern=".final.txt", replacement="")) %>%
+	mutate(sample=str_replace(individuals, pattern="/", replacement=""))
+
+df<-left_join(df, coverageSummary)
+df <- df %>% select(individuals, mutationRate, mean, std, min, `25%`, `50%`, `75%`, max)
+saveRDS(df, "../data/MSMCMutationRate_Coverage_Df_November28.rds")
+df %>%
+	ggplot(aes(x=mean, y=mutationRate)) +
+	geom_point()
+
+```
+
