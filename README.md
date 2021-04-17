@@ -64,6 +64,26 @@ The multiHetSep_.txt for our simulated genomes exist in this directory. Files st
 "../data/qlobataBootstrap200Iterations_row32_120iterations.rds", "../data/resequenced200Iterations_row28_120iterations.rds", and "../data/qroburBootstrap200Iterations_row32_120iterations.rds" contain the heterozygosity of 1Mb regions of best trimmed models.
 
 
+# PSMC Masks, input, and final output 
+
+q_lobata_reference_genomes
+     | +-- positive_masks
+     | +-- PSMC_final_output
+     | +-- PSMC_input
+     | +-- scripts
+q_robur_reference_genomes
+     | +-- positive_masks
+     | +-- PSMC_final_output
+     | +-- PSMC_input
+     | +-- scripts
+q_lobata_resequenced_genomes
+     | +-- positive_masks
+     | +-- PSMC_final_output
+     | +-- PSMC_input
+     | +-- scripts
+
+Files in q_robur_reference_genomes and q_lobata_reference_genomes correspond to Quercus robur and Quercus lobata respectively. The folder q_lobata_resequenced_genomes contains the files of Quercus lobata resequenced genomes  The positive_masks folders contain the positive masks as gzipped bed files for each chromosome for their respective PSMC' analysis. The PSMC_input folders contain the mutlihetsep files that were generated using the filtered variants and their respective positive mask. These files are the input for the PSMC' analysis and were generated with the script here: https://github.com/stschiff/msmc-tools/blob/master/vcfAllSiteParser.py. Finally, the PSMC_final_output contains the final output of PSMC' as a .txt file. These files contain the demographic history inferred for each species. The scripts used to generate each file are in the scripts folder. 
+
 # More information
 
 More information and methods for each data set can be found at "High quality genome and methylomes illustrate features underlying evolutionary success of oaks" Sork et. al 2021.
