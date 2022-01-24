@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Garcia"
+  given-names: "Jesse"
+  orcid: "https://orcid.org/0000-0001-8245-0408"
+- family-names: "Zhen"
+  given-names: "Ying"
+  orcid: "https://orcid.org/0000-0001-8382-2533"
+title: "Quercus lobata Demographic History Analysis Scripts for Reference Genome"
+version: 1.0
+date-released: 2022-01-24
+url: "https://github.com/JesseGarcia562/quercus_lobata_demographic_history"
