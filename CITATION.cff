@@ -8,6 +8,6 @@ authors:
   given-names: "Ying"
   orcid: "https://orcid.org/0000-0001-8382-2533"
 title: "Quercus lobata Demographic History Analysis Scripts for Reference Genome"
-version: v1.0.0
+version: v1.0.1
 date-released: 2022-01-24
 url: "https://github.com/JesseGarcia562/quercus_lobata_demographic_history"
